@@ -1,0 +1,173 @@
+---
+title: "Machine Learning"
+author: "Ulrich NGUEMDJO"
+date: "13/07/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The goal of the present project is to predict the manner in which people do their exercise using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+
+## Data loading and processing
+
+### Loading the data
+
+We first start by loading the Url of the training data set and the testing data set. 
+
+```{r, echo = TRUE}
+# loading libraries
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+# loading data
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainingRaw <- read.csv(trainUrl)
+testingRaw <- read.csv(testUrl)
+dim(trainingRaw); dim(testingRaw)
+rm(trainUrl) # removing the training URL in th environment
+rm(testUrl)  # removing the testing URL in th environment
+```
+
+### Cleaning data
+
+Before proceeding to data splitting, we first clean our data.
+
+1. **We remove the nearest zero variables in the data sets**
+
+```{r, echo = TRUE}
+NZV <- nearZeroVar(trainingRaw, saveMetrics=TRUE)
+head(NZV, 15)
+train1 <- trainingRaw[, !NZV$nzv]
+test1 <- testingRaw[, !NZV$nzv]
+dim(train1); dim(test1)
+
+rm(trainingRaw) # removing the raw training set in th environment
+rm(testingRaw)  # removing the raw testing set in th environment
+rm(NZV)         # removing the NZV info URL in th environment
+```
+
+2. **We remove variables that do not contribute in accelerometer measurements**
+
+```{r, echo = TRUE}
+IDvariables <- grepl("^X|timestamp|user_name", names(train1))
+training <- train1[, !IDvariables]
+testing <- test1[, !IDvariables]
+```
+
+3. **We remove columns with NA**: We plot the training set to visualize variables with missing values before deleting them.
+
+```{r, echo = TRUE}
+training %>%
+        is.na() %>%
+        reshape2::melt() %>%
+        ggplot(aes(Var2, Var1, fill=value)) + 
+        geom_raster() + 
+        coord_flip() +
+        scale_y_continuous(NULL, expand = c(0, 0)) +
+        scale_fill_grey(name = "", 
+                        labels = c("Present", 
+                                   "Missing")) +
+        xlab("Observation") +
+        theme(axis.text.y  = element_text(size = 4))
+```
+
+```{r, echo = TRUE}
+# deleting variables with NA
+cond <- (colSums(is.na(training)) == 0)
+training <- training[, cond]
+testing <- testing[, cond]
+rm(cond)
+```
+
+### Data splitting
+
+To apply the different approach we think can be use to predict the way of doing exercise, we split our training data into 2 data sets; a data set which will be use to train our models called `trainSet` (which represent 70\% of the data) and a data set which will be use to test our model `testSet` (which represent 30\% of the data).
+
+We set a seed to `2020` to make our results reproducible.  
+
+```{r, echo = TRUE}
+set.seed(2020)
+intrain <- createDataPartition(y = training$classe, p = 0.70, list = FALSE)
+trainSet <- training[intrain, ]
+testSet <- training[-intrain, ]
+dim(trainSet); dim(testSet)
+rm(intrain)
+```
+
+## Our predicting approach
+
+
+We decided to use two different models to predict using this data: **Decision Trees** and **Random Forests**.
+
+### Decision Trees
+
+We fit our model using a decision tree
+
+```{r, echo = TRUE}
+modelTree <- train(classe ~ ., data = trainSet, method = "rpart")
+fancyRpartPlot(modelTree$finalModel)
+```
+
+After fitting, we can now test our model on the testing set `testSet`.
+
+```{r, echo = TRUE}
+predictTree <- predict(modelTree, newdata = testSet)
+confusionMatrix(as.factor(testSet$classe), predictTree)
+```
+
+From this matrix of confusion, the accuracy rate of our Decision Tree model is **49.69%**.
+
+### Random Forests
+
+We fit no the data using a Random Forest model.
+
+```{r, echo = TRUE}
+modelRF <- train(classe ~ ., data = trainSet,method = "rf", trControl = trainControl(method = "cv", 5), ntree = 250)
+modelRF
+```
+
+After fitting, we can now test our model on the testing set `testSet`.
+
+```{r, echo = TRUE}
+predictRF <- predict(modelRF, testSet)
+confusionMatrix(as.factor(testSet$classe), predictRF)
+```
+
+We find that the Estimated Accuracy of the Random Forest Model is 99.68%.
+
+
+## Conlusion
+
+we find that the Accuracy of the Random Forest Model. so we conclude that the random forest is the better model.
+
+## Submission part
+
+We now use random forests to predict the outcome variable classe for  the original Testing data set.
+
+
+```{r, echo = TRUE}
+predict(modelRF, testing[, -length(names(testing))])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
